@@ -44,7 +44,7 @@ export function createDebugRecorder({video,container,isCameraReady,onStart=()=>{
   container.append(panel);const $=id=>panel.querySelector(`#${id}`);
   const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
   let recorder=null,capture=null,paintTimer=null,limitTimer=null,start=0,latest=null,samples=[],events=[],chunks=[],snapshots=[],snapshotTimes=[],snapshotJobs=[],lastSnapshot=-Infinity;
-  let recording=false,saving=false,finishing=false,pending=null,videoError=null;
+  let recording=false,saving=false,finishing=false,pending=null,videoError=null,rawVideo=false;
   const labeled=()=>!!$('debug-scenario').value&&!!$('debug-object').value;
   function readiness(){
     $('debug-toggle').disabled=finishing||saving||!!pending||(!recording&&(!isCameraReady()||!labeled()))||!window.MediaRecorder||(!!UPLOAD_URL&&!uploadKey);
@@ -107,7 +107,10 @@ export function createDebugRecorder({video,container,isCameraReady,onStart=()=>{
       const scale=Math.min(1,640/Math.max(video.videoWidth,video.videoHeight));canvas.width=Math.round(video.videoWidth*scale);canvas.height=Math.round(video.videoHeight*scale);
       samples=[];events=[];chunks=[];snapshots=[];snapshotTimes=[];snapshotJobs=[];lastSnapshot=-Infinity;videoError=null;
       start=performance.now();const startedAt=new Date().toISOString();recording=true;
-      capture=canvas.captureStream(15);
+      // 분석용 원본: 덧그림·좌우 반전 없는 카메라 영상을 그대로 녹화합니다(트랙 복제본이라 녹화를 끝내도 카메라는 유지).
+      // 사람이 보는 캡처 이미지(frame-*.jpg)만 안내선·손 점·삼각형을 덧그린 화면에서 찍습니다.
+      const cameraTrack=video.srcObject?.getVideoTracks?.()[0];rawVideo=!!cameraTrack;
+      capture=cameraTrack?new MediaStream([cameraTrack.clone()]):canvas.captureStream(15);
       const mime=['video/webm;codecs=vp8','video/webm','video/mp4'].find(type=>MediaRecorder.isTypeSupported(type));
       recorder=new MediaRecorder(capture,{...(mime?{mimeType:mime}:{}),videoBitsPerSecond:1500000});
       recorder.ondataavailable=event=>{if(event.data.size)chunks.push(event.data);};
@@ -116,7 +119,7 @@ export function createDebugRecorder({video,container,isCameraReady,onStart=()=>{
         const durationMs=Math.round(performance.now()-start);
         capture.getTracks().forEach(track=>track.stop());
         await Promise.all(snapshotJobs);
-        pending={video:new Blob(chunks,{type:recorder.mimeType}),snapshots,trace:{schemaVersion:1,startedAt,durationMs,scenario,objectColor,appVersion:APP_VERSION,notes:$('debug-notes').value.slice(0,500),userAgent:navigator.userAgent,video:{width:canvas.width,height:canvas.height,muted:true},samples,events,snapshotTimesMs:snapshotTimes,videoError}};
+        pending={video:new Blob(chunks,{type:recorder.mimeType}),snapshots,trace:{schemaVersion:1,startedAt,durationMs,scenario,objectColor,appVersion:APP_VERSION,notes:$('debug-notes').value.slice(0,500),userAgent:navigator.userAgent,video:rawVideo?{source:'camera-raw',width:video.videoWidth,height:video.videoHeight,mirrored:false,annotated:false,muted:true}:{source:'annotated-canvas',width:canvas.width,height:canvas.height,mirrored:video.classList.contains('mirrored'),annotated:true,muted:true},snapshots:{annotated:true,mirrored:video.classList.contains('mirrored')},samples,events,snapshotTimesMs:snapshotTimes,videoError}};
         finishing=false;
         await save();
       };
