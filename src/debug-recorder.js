@@ -32,14 +32,15 @@ export const SCENARIOS=[
   ['lighting','조명·반사 변화','조명 아래·그늘을 오가거나 반사되게 들기'],
   ['other','기타','메모에 상황 적기'],
 ];
-export function createDebugRecorder({video,container,isCameraReady}){
+export function createDebugRecorder({video,container,isCameraReady,onStart=()=>{},onStop=()=>{}}){
   const panel=document.createElement('section');panel.className='debug-panel';
-  panel.innerHTML=`<hr><h3>테스트 기록</h3><small>${UPLOAD_URL?'기록 시작을 누르면 카메라 영상(얼굴 포함)·손 위치·추적 로그를 프로젝트 담당자의 Google Drive 비공개 폴더로 보냅니다. 다른 참가자는 볼 수 없습니다.':'기록 시작을 누르면 카메라 영상·손 위치·추적 로그를 이 PC의 debug-recordings 폴더에 저장합니다.'} 음성은 기록하지 않습니다. 최대 30초입니다.</small>
+  panel.innerHTML=`<hr><h3>테스트 기록</h3>
     <label for="debug-scenario">촬영 상황 (필수)</label><select id="debug-scenario"><option value="">선택하세요</option>${SCENARIOS.map(([id,name,hint])=>`<option value="${id}">${name} — ${hint}</option>`).join('')}</select>
     <label for="debug-object">손에 든 물체의 실제 색 (필수)</label><select id="debug-object"><option value="">선택하세요</option>${COLORS.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}<option value="none">물체 없음</option><option value="mixed">여러 색·애매함</option></select>
-    <label for="debug-notes">문제 상황 메모</label><textarea id="debug-notes" maxlength="500" rows="2" placeholder="예: 파란 봉지를 움직이면 배경으로 튀어요"></textarea>
     <div class="debug-actions"><button id="debug-toggle" class="secondary" disabled>기록 시작</button><button id="debug-mark" class="secondary" disabled>문제 순간 표시</button></div>
-    <p id="debug-status" role="status" aria-live="polite">${UPLOAD_URL&&!uploadKey?'저장 키가 없어 기록할 수 없습니다. 받은 링크 전체(#key=... 포함)로 다시 열어 주세요.':'카메라 연결 후 기록할 수 있어요.'}</p><button id="debug-retry" class="secondary" hidden>저장 재시도</button>`;
+    <p id="debug-status" role="status" aria-live="polite">${UPLOAD_URL&&!uploadKey?'저장 키가 없어 기록할 수 없습니다. 받은 링크 전체(#key=... 포함)로 다시 열어 주세요.':'카메라 연결 후 기록할 수 있어요.'}</p><button id="debug-retry" class="secondary" hidden>저장 재시도</button>
+    <label for="debug-notes">문제 상황 메모</label><textarea id="debug-notes" maxlength="500" rows="2" placeholder="예: 파란 봉지를 움직이면 배경으로 튀어요"></textarea>
+    <small>${UPLOAD_URL?'기록 시작을 누르면 카메라 영상(얼굴 포함)·손 위치·추적 로그를 프로젝트 담당자의 Google Drive 비공개 폴더로 보냅니다. 다른 참가자는 볼 수 없습니다.':'기록 시작을 누르면 카메라 영상·손 위치·추적 로그를 이 PC의 debug-recordings 폴더에 저장합니다.'} 음성은 기록하지 않습니다. 최대 38초(색 찾기·그리기 30초 + 준비 3초)입니다.</small>`;
   container.append(panel);const $=id=>panel.querySelector(`#${id}`);
   const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
   let recorder=null,capture=null,paintTimer=null,limitTimer=null,start=0,latest=null,samples=[],events=[],chunks=[],snapshots=[],snapshotTimes=[],snapshotJobs=[],lastSnapshot=-Infinity;
@@ -62,10 +63,11 @@ export function createDebugRecorder({video,container,isCameraReady}){
     const point=(p,color,size)=>{ctx.beginPath();ctx.fillStyle=color;ctx.arc(left+(mirror?1-p.x:p.x)*side,top+p.y*side,size,0,Math.PI*2);ctx.fill();};
     // Expired telemetry is not drawn as a fresh detection.
     const fresh=latest&&performance.now()-latest.timestamp<700;
+    if(latest?.path&&latest.phase!=='countdown'){ctx.strokeStyle='#ffffffcc';ctx.lineWidth=2;ctx.beginPath();latest.path.forEach((p,i)=>{const x=left+(mirror?1-p.x:p.x)*side,y=top+p.y*side;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.closePath();ctx.stroke();}
     if(fresh){for(const hand of latest.hands??[])for(const p of hand.points)point(p,'#fcd34d',2);if(latest.target)point(latest.target,'#22f39b',7);}
     ctx.fillStyle='#102039d9';ctx.fillRect(0,0,w,66);ctx.fillStyle='white';ctx.font='13px sans-serif';
     ctx.fillText(`REC ${((performance.now()-start)/1000).toFixed(1)}s | ${latest?.color??'not-started'} | ${fresh?latest.reason:'NO_FRESH_SAMPLE'}`,10,22);
-    ctx.fillText(`color ${((latest?.rawCoverage??0)*100).toFixed(1)}% | accepted ${((latest?.coverage??0)*100).toFixed(1)}% | hands ${fresh?latest.hands.length:0}`,10,45);
+    ctx.fillText(`color ${((latest?.rawCoverage??0)*100).toFixed(1)}% | accepted ${((latest?.coverage??0)*100).toFixed(1)}% | hands ${fresh?latest.hands.length:0} | ${latest?.phase??'-'} ${latest?.trace?`${latest.trace.passed}/12 acc ${latest.trace.accuracy?.toFixed(1)??'-'}`:''}`,10,45);
     if(performance.now()-lastSnapshot>=2000){
       lastSnapshot=performance.now();const t=Math.round(lastSnapshot-start);const index=snapshots.length;snapshots.push(null);snapshotTimes.push(t);
       snapshotJobs.push(new Promise(resolve=>canvas.toBlob(blob=>{snapshots[index]=blob;resolve();},'image/jpeg',.8)));
@@ -91,7 +93,7 @@ export function createDebugRecorder({video,container,isCameraReady}){
   }
   function finish(reason='manual'){
     if(!recording)return;
-    events.push({tMs:Math.round(performance.now()-start),type:'stop',reason});recording=false;finishing=true;
+    events.push({tMs:Math.round(performance.now()-start),type:'stop',reason});recording=false;finishing=true;onStop(reason);
     clearInterval(paintTimer);clearTimeout(limitTimer);
     $('debug-toggle').textContent='기록 시작';$('debug-mark').disabled=true;$('debug-toggle').disabled=true;
     if(recorder.state!=='inactive')recorder.stop();
@@ -118,7 +120,7 @@ export function createDebugRecorder({video,container,isCameraReady}){
         finishing=false;
         await save();
       };
-      recorder.start(1000);draw();paintTimer=setInterval(draw,1000/15);limitTimer=setTimeout(()=>finish('30-second-limit'),30000);
+      recorder.start(1000);onStart();draw();paintTimer=setInterval(draw,1000/15);limitTimer=setTimeout(()=>finish('38-second-limit'),38000);
       $('debug-status').textContent='● 기록 중 · 영상과 로그는 이 PC에만 저장합니다.';$('debug-mark').disabled=false;
     }catch(error){recording=false;capture?.getTracks().forEach(track=>track.stop());$('debug-status').textContent='기록을 시작하지 못했습니다. 브라우저의 영상 기록 지원을 확인해 주세요.';readiness();}
   });

@@ -7,3 +7,5 @@
 .color-palette{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:12px}.color-palette .color-choice{display:flex;flex-direction:column;align-items:center;gap:6px;padding:9px 2px;width:auto;min-width:0;font-size:11px;background:#f5f7fc;color:#526381;border:2px solid transparent;border-radius:10px}.color-choice span{width:20px;height:20px;border-radius:50%;border:1px solid #b9c3d6}.color-palette .color-choice[aria-pressed=true]{border-color:#2463eb;background:#eaf1ff;color:#174fb9}
 
 #select-held-object,#auto-held-object{margin-top:8px}.camera-stage.selecting-object{cursor:crosshair;outline:3px solid #2463eb;outline-offset:3px}
+
+.trace-overlay{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}.trace-target{fill:none;stroke:#ffffffd9;stroke-width:.012;stroke-linejoin:round}.trace-start{fill:#22f39b55;stroke:#22f39b;stroke-width:.008}.trace-line{stroke:#ffd34a;stroke-width:.014;stroke-linecap:round}.trace-line.restored{stroke-dasharray:.02 .02;stroke:#ffd34acc}

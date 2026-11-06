@@ -50,6 +50,8 @@ export function evaluateHeldCandidates(candidates,frameArea,previous,{hands,now,
   return {target,reason,rejectionCounts,diagnostics:diagnostics.slice(0,20).map((d,index)=>({candidateIndex:index,reason:d.reason}))};
 }
 
+// 색상 찾기 성공 기준: 중앙 상자 안 목표색 비율. 확정 규칙은 50%였으나 테스트에서 높다는 사용자 판단으로 30%(2026-11-06).
+export const SUCCESS_COVERAGE=.3;
 export class ColorHold {
   constructor(){this.reset();}
   reset(){this.since=null;this.last=null;this.success=false;}
@@ -57,7 +59,7 @@ export class ColorHold {
     if(this.success) return {success:true,progress:1};
     if(this.last!==null&&(now-this.last>250||now<this.last)) this.since=null;
     this.last=now;
-    if(coverage<.5){this.since=null;return {success:false,progress:0};}
+    if(coverage<SUCCESS_COVERAGE){this.since=null;return {success:false,progress:0};}
     if(this.since===null) this.since=now;
     const progress=Math.min(1,(now-this.since)/500);
     this.success=progress>=1;

@@ -1,7 +1,6 @@
 import {createColorPractice} from './color-practice.js';
 const $ = (id) => document.getElementById(id);
 let stream = null;
-let ready = false;
 let requestVersion = 0;
 let cameraReady = false;
 let cancelConnection = null;
@@ -22,19 +21,12 @@ $('nickname-form').addEventListener('submit', (event) => {
   const name = $('nickname').value.trim();
   if (!name || [...name].length > 12) { $('form-error').textContent = '닉네임을 1~12자로 입력해 주세요.'; return; }
   try { sessionStorage.setItem('color-trace.nickname', name); } catch { /* No persistent storage required. */ }
-  $('player-name').textContent = name;
   $('welcome').hidden = true;
   $('lobby').hidden = false;
   $('camera-toggle').focus();
 });
 function renderReady() {
-  const connected = cameraReady;
-  $('camera-check').textContent = connected ? '●' : '○';
-  $('ready-check').textContent = ready ? '●' : '○';
-  $('ready').disabled = !connected;
-  $('ready').textContent = !connected ? '카메라를 먼저 연결해 주세요' : ready ? '준비 취소' : '준비 완료';
-  $('ready-status').textContent = ready ? '준비 완료! 아래에서 색상 인식을 시작할 수 있어요.' : '카메라 연결과 플레이 영역을 확인한 뒤 준비해 주세요.';
-  practice.updateReady(connected && ready);
+  practice.updateReady(cameraReady);
 }
 function stopCamera() {
   practice.stop();
@@ -45,7 +37,6 @@ function stopCamera() {
   stream = null;
   cameraReady = false;
   $('camera').srcObject = null;
-  ready = false;
   $('placeholder').hidden = false;
   $('play-area').hidden = true;
   $('live').hidden = true;
@@ -161,7 +152,6 @@ $('mirror').addEventListener('change', () => $('camera').classList.toggle('mirro
 $('camera').classList.add('mirrored');
 $('camera').addEventListener('loadedmetadata', sizePlayArea);
 new ResizeObserver(sizePlayArea).observe($('camera').parentElement);
-$('ready').addEventListener('click', () => { ready = !ready; renderReady(); });
 $('leave').addEventListener('click', () => { stopCamera(); $('lobby').hidden = true; $('welcome').hidden = false; $('nickname').focus(); });
 $('help').addEventListener('click', () => $('help-dialog').showModal());
 $('close-help').addEventListener('click', () => $('help-dialog').close());
