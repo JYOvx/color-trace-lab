@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>COLOR TRACE</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><button id="help" class="icon" aria-label="게임 설명 열기">?</button><a class="logo" href="./">COLOR <span>TRACE</span><i>✦</i></a><span class="badge">색상 인식 테스트</span></header>
+<main>
+<section id="welcome" class="welcome">
+ <div class="intro"><span class="eyebrow">주변의 색으로, 함께 그리는 순간</span><h1>색을 찾고,<br>선을 따라 그려요<span>.</span></h1><p>카메라 앞의 작은 물체가 나만의 펜이 됩니다.<br>30초 안에 색을 찾아 삼각형을 완성해 보세요.</p><div class="dots" aria-label="초기 색상 8종"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+ <form id="nickname-form" class="card"><span class="eyebrow">LET’S PLAY</span><h2>어떤 이름으로 불러드릴까요?</h2><p>회원가입 없이 가볍게 시작하세요.</p><label for="nickname">닉네임</label><input id="nickname" autocomplete="off" maxlength="12" placeholder="닉네임을 입력하세요" required aria-describedby="nickname-hint"><small id="nickname-hint">공백을 제외한 1~12자 · 이 탭에서 새로고침해도 유지</small><button class="primary" type="submit">혼자 테스트할 방 만들기 <span>→</span></button><p class="note">카메라 연결 후 색상 찾기를 연습할 수 있어요.<br>온라인 방 참가와 실제 게임은 이후 단계에서 연결됩니다.</p><p id="form-error" role="alert"></p></form>
+</section>
+<section id="lobby" hidden>
+ <div class="section-heading"><div><span class="eyebrow">CAMERA CHECK</span><h1>플레이를 준비해요</h1></div><button id="leave" class="secondary">방 나가기</button></div>
+ <div class="room-grid"><div class="camera-panel"><div class="camera-stage"><video id="camera" autoplay muted playsinline></video><div id="placeholder"><div class="camera-symbol">◎</div><h2>카메라를 연결해 주세요</h2><p>물체와 배경이 잘 구분되는 밝은 곳이 좋아요.</p></div><div id="play-area" hidden><div class="search-area"><span>색상 찾기 영역</span></div></div><span id="live" hidden>● LIVE CAMERA</span></div><div class="camera-toolbar"><button id="camera-toggle" class="primary">카메라 켜기</button><label class="switch"><input id="mirror" type="checkbox" checked> 좌우 반전</label></div><p id="camera-status" role="status" aria-live="polite">카메라는 버튼을 누른 뒤 연결합니다. 영상은 서버로 전송하지 않습니다.</p></div>
+ <aside class="card"><span class="eyebrow">내 테스트 대기실</span><h2>준비 상태</h2><div class="player"><span class="avatar">✦</span><strong id="player-name"></strong><span class="badge">방장 · 나</span></div><div class="checklist"><p><span id="camera-check">○</span> 카메라 연결</p><p><span id="ready-check">○</span> 플레이 준비</p></div><button id="ready" class="secondary" disabled>카메라를 먼저 연결해 주세요</button><p id="ready-status" role="status" aria-live="polite">카메라가 연결되면 준비 상태를 바꿀 수 있어요.</p><hr><h3>다음 구현 단계</h3><p>30초 게임 진행 → 삼각형 추적과 현재 정확도 → 온라인 멀티플레이</p><small>이 버전에서는 게임 타이머와 점수 계산을 아직 실행하지 않습니다.</small></aside></div>
+</section>
+</main>
+<footer>COLOR TRACE <span>색을 찾고, 움직이고, 함께 완성하기</span></footer>
+<dialog id="help-dialog"><div class="dialog-heading"><h2>게임 진행 방법</h2><button id="close-help" class="icon" aria-label="설명 닫기">×</button></div><ol><li><strong>색상 찾기</strong><p>중앙 안내 상자의 절반 이상을 목표 색상으로 0.5초 채우세요.</p></li><li><strong>남은 시간을 저장하고 대기</strong><p>색상 찾기와 그리기는 총 30초를 공유합니다. 색상을 찾으면 타이머를 멈추고 모두의 판정을 기다려요.</p></li><li><strong>3초 준비 후 한붓그리기</strong><p>시작점으로 이동한 뒤, 삼각형을 어느 방향으로든 따라 그려요. 그리는 동안 현재 정확도를 표시합니다.</p></li><li><strong>완성 후 결과 확인</strong><p>전체 경로를 거쳐 끝점으로 돌아오면 기록 종료. 완성자는 정확도순으로 순위를 정하고, 시간 초과는 미완성이에요.</p></li></ol><p class="note">위 내용은 완성될 게임 규칙입니다. 현재 버전은 첫 화면·대기실·카메라·색상 찾기와 물체 추적 테스트까지 제공합니다.</p></dialog>
+<script type="module" src="src/app.js"></script>
+</body></html>

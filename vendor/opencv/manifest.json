@@ -1,0 +1,9 @@
+{
+  "name": "OpenCV.js",
+  "version": "4.9.0",
+  "url": "https://docs.opencv.org/4.9.0/opencv.js",
+  "files": {
+    "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "opencv.js": "4d7b85e2e12ea0bd088f491c311d620a45b53d1489b7f065b4492a230bda243a"
+  }
+}
