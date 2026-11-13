@@ -9,3 +9,32 @@
 #select-held-object,#auto-held-object{margin-top:8px}.camera-stage.selecting-object{cursor:crosshair;outline:3px solid #2463eb;outline-offset:3px}
 
 .trace-overlay{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}.trace-target{fill:none;stroke:#ffffffd9;stroke-width:.012;stroke-linejoin:round}.trace-start{fill:#22f39b55;stroke:#22f39b;stroke-width:.008}.trace-line{stroke:#ffd34a;stroke-width:.014;stroke-linecap:round}.trace-line.restored{stroke-dasharray:.02 .02;stroke:#ffd34acc}
+
+/* 테이프 모눈 스케치북의 종이, 링 제본과 접는 색상표입니다. */
+:root{--blue:#395c7e;color:#273c50;background:#eaf0ef}
+body{max-width:1220px;margin:16px auto;background-color:#fffcf1;background-image:linear-gradient(#90b7d136 1px,transparent 1px),linear-gradient(90deg,#90b7d136 1px,transparent 1px);background-size:17px 17px;border:1px solid #a5bac5;border-bottom:5px solid #7895a7;border-radius:8px 15px 12px 8px}
+body::before{content:"";display:block;height:22px;margin-inline:4%;background:radial-gradient(ellipse 5px 17px at 50% 0,transparent 69%,#617d8d 72% 88%,transparent 92%) 0 0/42px 22px repeat-x}
+header{height:62px;justify-content:space-between;border-bottom:1px solid #b7c9d3}
+.logo,.logo span{font:italic bold clamp(29px,4vw,43px)/1 Georgia,serif;color:#304e68}.logo span{color:#587ba0}
+main{padding:16px clamp(10px,2.4vw,28px) 30px}
+.section-heading{margin:0 0 10px}.section-heading h1{font-size:22px;margin:0}
+.room-grid{display:block}.camera-stage{position:relative;width:100%;aspect-ratio:16/9;border:6px solid white;border-bottom-width:13px;background:#27343d;border-radius:2px;box-shadow:0 0 0 1px #bac6c8,1px 3px 4px #28312a20}
+.camera-stage::before,.camera-stage::after{content:"";z-index:3;position:absolute;top:7px;width:68px;height:15px;background:repeating-linear-gradient(100deg,#f5dda1e6 0 5px,#edd197e6 5px 8px);pointer-events:none}
+.camera-stage::before{left:-17px;transform:rotate(-36deg)}.camera-stage::after{right:-17px;transform:rotate(36deg)}
+.camera-view{position:absolute;inset:0;display:grid;place-items:center;overflow:hidden;color:white}.camera-view video{inset:0}.camera-view #placeholder p{color:#d3dee6}
+#live{left:34px;top:12px}#play-area{box-sizing:border-box}.search-area{border:3px solid #ffe600;box-shadow:0 0 0 2px #171923,inset 0 0 0 1px #171923}.search-area span{background:#182129;color:#ffeb46}
+.trace-target{stroke:#fff;stroke-dasharray:.02 .018;filter:drop-shadow(0 1px 1px #25272a)}.trace-line,.trace-line.restored{stroke:var(--target-color);filter:drop-shadow(0 1px 1px #222)}.trace-line.restored{opacity:.85}
+.game-hud{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:108px;padding:14px 10px;display:grid;gap:16px;color:#e8eff3;background:#131d24db;border-radius:7px;pointer-events:none}
+.game-hud span{font-size:12px}.game-hud b{display:block;font:700 23px/1.3 system-ui,sans-serif;font-variant-numeric:tabular-nums;color:white}.game-hud.urgent #time-left{color:#ffb476}
+.pencil-bar{position:relative;margin:0 0 12px;padding:10px 16px;background:#fffdf7;border:1px dashed #aabec7;border-radius:5px}.pencil-bar .target-color{margin:0;min-height:36px;padding-right:115px}.target-color #color-swatch{height:22px;width:32px;border-radius:42% 20% 38% 15%}
+#pencils summary{position:absolute;top:10px;right:12px;background:#e4eff8;border:1px solid #adc3d3;padding:7px 12px;color:#274c6c;border-radius:4px;cursor:pointer}
+.color-palette{grid-template-columns:repeat(13,minmax(0,1fr));gap:4px;margin:12px 0 0}.color-palette .color-choice{border-radius:5px;background:#faf8ef;min-height:44px}.color-choice span{height:13px;width:24px;border-radius:40% 20% 35% 18%;transform:rotate(-7deg)}
+#game-result{position:absolute;inset:0;z-index:5;display:grid;place-items:center;background:#18282bbd;padding:10px}
+.result-note{position:relative;text-align:center;width:min(320px,100%);background:repeating-linear-gradient(transparent 0 24px,#c3d2df72 24px 25px),#fffdf3;padding:16px 20px;border:1px solid #a9b3bb;box-shadow:3px 4px #d8e0db;transform:rotate(-.6deg)}
+.result-note::before{content:"";position:absolute;top:-8px;left:40%;width:20%;height:15px;background:#f1dda6d9;transform:rotate(-4deg)}
+.result-note h2{margin:5px 0}.result-note strong{font:700 36px/1.2 system-ui;color:#395c7e}.result-note p{font-size:12px;margin:5px 0;overflow-wrap:anywhere}.result-note button{padding:9px 12px;margin-top:4px}
+.room-grid aside{padding:14px 20px;border-radius:6px;box-shadow:none}.room-grid aside h3,.room-grid aside hr{margin:10px 0}.color-practice summary{cursor:pointer;font-weight:700}.camera-toolbar{flex-wrap:wrap;gap:8px}#color-status{margin:8px 0;color:#293d50;font-size:14px}button.primary,button.secondary{border-radius:6px}
+@media(max-width:700px){body{margin:0}header{height:49px}.camera-stage{aspect-ratio:4/5;min-height:345px;border-width:4px 4px 8px}.camera-view{inset:26px 0 0}.camera-stage::before,.camera-stage::after{width:39px;height:8px;top:0}.game-hud{top:5px;left:8px;right:8px;width:auto;transform:none;grid-template-columns:repeat(3,1fr);gap:5px;padding:6px 12px}.game-hud b{font-size:19px}.color-palette{grid-template-columns:repeat(7,minmax(0,1fr))}.room-grid aside{padding:12px}.welcome{min-height:0}#live{top:3px;left:6px}}
+.stage-tabs{display:flex;gap:4px;align-items:center;color:#675e54;font-size:13px}.stage-tabs span{padding:4px 8px}
+#lobby[data-phase=search] [data-step=search],#lobby[data-phase=draw] [data-step=draw],#lobby[data-phase=done] [data-step=done]{background:#f8e7a7;border-radius:2px;border-bottom:2px solid #dabb76}
+@media(max-width:700px){.section-heading{flex-wrap:wrap;gap:6px}.stage-tabs{order:3;width:100%}.section-heading #leave{margin-left:auto}}

@@ -1,2 +1,2 @@
 export const UPLOAD_URL="https://script.google.com/macros/s/AKfycbzWzWk6FNHTzUgML0bf2ia_6ygyyKAt93xJv6FliXC1R4eGFQU3FVlH53OZn0d02vr0/exec";
-export const APP_VERSION="701381a3b516";
+export const APP_VERSION="116c2c06b3aa";

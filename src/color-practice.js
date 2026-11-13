@@ -8,17 +8,13 @@ const TIME_BUDGET=30000,COUNTDOWN=3000;
 export function createColorPractice({video, playArea, isCameraReady}) {
   const panel=document.createElement('section');
   panel.className='color-practice';
-  panel.innerHTML=`<h3>목표 색상</h3>
-    <div id="color-palette" class="color-palette" role="group" aria-label="목표 색상 선택 (누르면 그 색으로 인식을 다시 시작)"></div><select id="practice-color" hidden aria-hidden="true"></select>
-    <div class="target-color"><span id="color-swatch"></span><strong id="target-name">시작하면 색상이 정해져요</strong></div>
+  panel.innerHTML=`<details><summary>물체 지정과 인식 정보</summary>
     <div class="detection-stats"><span>상자 안 색상 비율 <b id="raw-color-coverage">—</b></span><span>손에 든 물체 인정 비율 <b id="color-coverage">—</b></span><span>0.5초 유지 <b id="color-hold">—</b></span></div>
-    <div class="detection-stats" aria-label="한붓그리기"><span>남은 시간 <b id="time-left">30.0초</b></span><span>현재 정확도 <b id="trace-accuracy">—</b></span><span>진행률 <b id="trace-progress">—</b></span></div>
     <progress id="hold-progress" max="1" value="0" aria-label="목표 색상 0.5초 유지 진행"></progress>
     <button id="select-held-object" class="secondary" disabled>쥔 물체 직접 지정</button><button id="auto-held-object" class="secondary" hidden>자동 손 추적으로 전환</button>
-    <p id="color-status" role="status" aria-live="polite">목표 색을 고르고 아래에서 기록 시작을 누르면 게임이 시작됩니다.</p>
-    <small>손이 가려져 인식되지 않으면 ‘쥔 물체 직접 지정’을 누르고 영상 속 물체를 누르세요.</small>`;
+    <small>손이 가려져 인식되지 않으면 ‘쥔 물체 직접 지정’을 누르고 영상 속 물체를 누르세요.</small></details>`;
   document.querySelector('aside').append(panel);
-  const $=id=>panel.querySelector(`#${id}`);
+  const $=id=>document.getElementById(id);
   COLORS.forEach(color=>$('practice-color').add(new Option(color.name,color.id)));
   for(const color of COLORS){
     const button=document.createElement('button');button.type='button';button.dataset.color=color.id;
@@ -64,7 +60,46 @@ export function createColorPractice({video, playArea, isCameraReady}) {
   }
   let lastTime=-1;
   // 기록 시작 = 게임 시작, 기록 종료(직접·38초 상한·카메라 끄기) = 게임 초기화.
-  const debug=createDebugRecorder({video,container:document.querySelector('aside'),isCameraReady,onStart:()=>void start(),onStop:()=>reset('기록을 마쳤습니다. 기록 시작을 누르면 게임을 다시 시작합니다.')});
+  let deadline=null;
+  const debug=createDebugRecorder({video,container:document.querySelector('aside'),isCameraReady,prepare:prepareGame,onStart:start,
+    onStop:reason=>{if(reason!=='game-ended')reset('기록을 마쳤습니다. 새 기록을 시작할 수 있어요.');},
+    onAvailability:(available,message,failed)=>{
+      $('play-again').disabled=!available;
+      $('result-save').textContent=message;
+      $('result-retry').hidden=!failed;
+    }});
+  $('play-again').addEventListener('click',()=>{
+    $('practice-color').value=target.id;
+    previewChoice();
+    debug.start();
+  });
+  $('result-retry').addEventListener('click',()=>debug.retry());
+  // 프레임 수신이 멎어도 시간 제한을 지킵니다.
+  function armDeadline(at,reason){
+    clearTimeout(deadline);
+    deadline=setTimeout(()=>finishGame(reason,at),Math.max(0,at-performance.now()));
+  }
+  // 마지막 판정을 보존하고 현재 녹화만 자동 저장합니다.
+  function finishGame(reason,now){
+    if(!active)return;
+    remaining=reason==='complete'?Math.max(0,timeLeft(now)):0;
+    phase='done';$('lobby').dataset.phase='done';outcome=reason;active=false;
+    clearTimeout(deadline);cancelFrame();handDetector?.close();handDetector=null;
+    const state=judge?.state();
+    const accuracy=state?.accuracy==null?'—':state.accuracy.toFixed(1)+'%';
+    const progress=Math.round((state?.progress??0)*100)+'%';
+    const seconds=(remaining/1000).toFixed(1)+'초';
+    $('time-left').textContent=seconds;$('trace-progress').textContent=progress;$('trace-accuracy').textContent=accuracy;
+    $('result-title').textContent={complete:'삼각형 완성!',timeout:'시간 종료 · 미완성','color-failed':'색 찾기 실패'}[reason];
+    $('result-score').textContent=accuracy;
+    $('result-stats').textContent='진행률 '+progress+' · 남은 시간 '+seconds;
+    $('color-status').textContent=$('result-title').textContent;
+    $('select-held-object').disabled=true;
+    for(const button of $('color-palette').children)button.disabled=false;
+    $('game-result').hidden=false;$('result-title').focus({preventScroll:true});
+    debug.event(reason==='complete'?'trace-complete:'+state.accuracy.toFixed(1):reason==='timeout'?'trace-timeout':'trace-color-failed');
+    debug.endGame({timestamp:now,phase,outcome,timeLeftMs:Math.round(remaining),trace:state?{started:state.started,direction:state.direction,passed:state.passed,accuracy:state.accuracy,complete:state.complete}:null});
+  }
   function cancelFrame(){
     if(frameId===null)return;
     if(video.requestVideoFrameCallback)video.cancelVideoFrameCallback(frameId);
@@ -72,6 +107,7 @@ export function createColorPractice({video, playArea, isCameraReady}) {
     frameId=null;
   }
   function reset(message='목표 색을 고르고 아래에서 기록 시작을 누르면 게임이 시작됩니다.') {
+    clearTimeout(deadline);$('lobby').dataset.phase='search';$('game-result').hidden=true;$('game-hud').classList.remove('urgent');
     for(const button of $('color-palette').children)button.disabled=false;
     manualPoint=null;manualLock=false;selecting=false;
     $('select-held-object').disabled=true;$('auto-held-object').hidden=true;
@@ -90,6 +126,7 @@ export function createColorPractice({video, playArea, isCameraReady}) {
   }
   function updateReady(ready){
     practiceReady=ready;
+    $('game-hud').hidden=!ready;
     debug.updateReady();
     if(!ready)reset();
   }
@@ -131,19 +168,22 @@ export function createColorPractice({video, playArea, isCameraReady}) {
         marker.style.left=`${(mirror?1-result.target.x:result.target.x)*100}%`;
         marker.style.top=`${result.target.y*100}%`;marker.hidden=false;
       } else marker.hidden=true;
+      if((phase==='search'||phase==='draw')&&timeLeft(now)<=0){finishGame(phase==='search'?'color-failed':'timeout',now);return;}
       if(phase==='search'&&state.success){
         // 색상 찾기 성공: 남은 시간을 보존하고 3초 준비(시간 차감 없음) 동안 시작점만 보여 줍니다.
-        remaining=Math.max(0,TIME_BUDGET-(now-searchStart));phase='countdown';countdownUntil=now+COUNTDOWN;
+        remaining=Math.max(0,TIME_BUDGET-(now-searchStart));phase='countdown';$('lobby').dataset.phase='draw';countdownUntil=now+COUNTDOWN;
         path=trianglePath(true,video.classList.contains('mirrored'));judge=createTraceJudge(path.vertices);debug.event('trace-countdown');
-      } else if(phase==='search'&&now-searchStart>=TIME_BUDGET){phase='done';outcome='color-failed';debug.event('trace-color-failed');}
-      if(phase==='countdown'&&now>=countdownUntil){phase='draw';drawStart=now;lost=false;debug.event('trace-draw-start');}
+        armDeadline(countdownUntil+remaining,'timeout');
+      }
+      if(phase==='countdown'&&now>=countdownUntil){phase='draw';drawStart=countdownUntil;lost=false;debug.event('trace-draw-start');}
       if(phase==='draw'){
         if(result.target){judge.add({x:result.target.x,y:result.target.y},{restored:lost});lost=false;}else lost=true;
         const s=judge.state();
-        if(s.complete){remaining=timeLeft(now);phase='done';outcome='complete';debug.event(`trace-complete:${s.accuracy.toFixed(1)}`);}
-        else if(timeLeft(now)<=0){remaining=0;phase='done';outcome='timeout';debug.event('trace-timeout');}
+        if(timeLeft(now)<=0){finishGame('timeout',now);return;}
+        if(s.complete){renderOverlay();finishGame('complete',now);return;}
       }
       const ts=judge?.state();
+      $('game-hud').classList.toggle('urgent',timeLeft(now)<=5000);
       $('time-left').textContent=`${(Math.max(0,timeLeft(now))/1000).toFixed(1)}초`;
       $('trace-accuracy').textContent=ts?.started&&ts.accuracy!==null?`${ts.accuracy.toFixed(1)}%`:'—';
       $('trace-progress').textContent=ts?`${Math.round(ts.progress*100)}%`:'—';
@@ -152,34 +192,40 @@ export function createColorPractice({video, playArea, isCameraReady}) {
         found=true;playArea.classList.add('color-found');
         $('color-status').textContent=result.target?'색상 찾기 성공! 손에 든 물체를 점선 영역 안에서 움직여 보세요.':'추적 끊김 · 손과 물체를 함께 보여주세요. 배경으로 대상을 바꾸지 않고 기다립니다.';
       } else $('color-status').textContent=!hands.length?(result.rawCoverage>0?`${target.name} 색상은 보이지만 손을 찾지 못했어요. 물체 옆으로 손가락을 더 보여주세요.`:'손을 찾고 있어요. 물체와 손가락을 함께 보여주세요.'):!result.target?'손 주변에서 목표 색상 물체를 찾고 있어요.':result.coverage>=SUCCESS_COVERAGE?'좋아요! 이 상태를 0.5초 유지해 주세요.':`중앙 상자의 ${SUCCESS_COVERAGE*100}% 이상을 손에 든 목표 색상 물체로 채워 주세요.`;
-      const phaseMessage=phase==='countdown'?`${Math.ceil((countdownUntil-now)/1000)}초 뒤 시작 · 물체를 동그라미(시작점)로 옮기세요.`:phase==='draw'?(!ts.started?'시작점으로 이동하세요.':!result.target?'물체를 영역 안에 보여주세요. 시간은 계속 흐릅니다.':'삼각형을 따라 한 번에 그려 시작점으로 돌아오세요.'):phase==='done'?{complete:`완성! 정확도 ${ts?.accuracy?.toFixed(1)}% · 기록 종료 후 다시 기록하면 새 게임입니다.`,timeout:'시간 종료 · 미완성입니다. 기록 종료 후 다시 기록하면 새 게임입니다.','color-failed':'30초 안에 색을 찾지 못했습니다. 기록 종료 후 다시 기록하면 새 게임입니다.'}[outcome]:null;
+      const phaseMessage=phase==='countdown'?`${Math.ceil((countdownUntil-now)/1000)}초 뒤 시작 · 물체를 동그라미(시작점)로 옮기세요.`:phase==='draw'?(!ts.started?'시작점으로 이동하세요.':!result.target?'물체를 영역 안에 보여주세요. 시간은 계속 흐릅니다.':'삼각형을 따라 한 번에 그려 시작점으로 돌아오세요.'):null;
       if(manualLock&&!phaseMessage)$('color-status').textContent=selecting?'영상 속 쥔 물체의 목표색 부분을 클릭하세요.':!result.target?'지정한 물체를 놓쳤습니다. 다른 배경으로 바꾸지 않습니다. 직접 지정을 눌러 다시 선택해 주세요.':found?'지정한 물체 추적 중 · 색상 찾기 성공':result.coverage>=SUCCESS_COVERAGE?'지정한 물체 확인 · 이 상태를 0.5초 유지하세요.':'지정한 물체를 중앙 상자에 더 가까이 대 주세요.';
       if(phaseMessage)$('color-status').textContent=phaseMessage;
     } catch(error) {
       debug.event(`analysis-error:${error.name}`);
+      debug.stop();
       reset('영상 분석을 중단했습니다. 카메라를 다시 연결한 뒤 재시도해 주세요.');
       return;
     }
     schedule();
   }
-  async function start(){
-    if(!isCameraReady())return;
+  // 모델을 먼저 준비해 녹화 상한과 게임 시간을 모두 보장합니다.
+  async function prepareGame(){
+    if(!isCameraReady())return false;
     reset();
     // 게임 중에는 목표 색을 바꾸지 않습니다(기록 한 개 = 색 한 개).
     for(const button of $('color-palette').children)button.disabled=true;
+    $('pencils').open=false;
     const version=generation;
     $('color-status').textContent='OpenCV와 손 인식 모델을 준비하고 있어요…';
     const detector=new HandDetector();handDetector=detector;
     try{const [{cv}]=await Promise.all([loadOpenCV(),detector.load()]);tracker=new OpenCVTracker(cv);}catch(error){
-      if(version!==generation)return;
-      reset('OpenCV 또는 손 인식을 준비하지 못했습니다. 기록을 종료한 뒤 다시 시작해 주세요.');return;
+      if(version!==generation)return false;
+      reset('OpenCV 또는 손 인식을 준비하지 못했습니다. 다시 시작해 주세요.');return false;
     }
-    if(version!==generation)return;
+    return version===generation&&isCameraReady();
+  }
+  // 녹화가 시작된 시각부터 30초 게임을 진행합니다.
+  function start(){
     target=COLORS.find(color=>color.id===$('practice-color').value)??COLORS[Math.floor(Math.random()*COLORS.length)];
     $('target-name').textContent=`목표 색상 · ${target.name}`;$('color-swatch').style.background=target.hex;
-    marker.style.setProperty('--target-color',target.hex);
+    playArea.style.setProperty('--target-color',target.hex);
     $('color-status').textContent='중앙 상자 안에 목표 색상 물체를 가까이 대 주세요.';
-    active=true;lastProcessed=-Infinity;lastTime=-1;phase='search';searchStart=performance.now();debug.event(`game-start:${target.id}`);schedule();
+    active=true;lastProcessed=-Infinity;lastTime=-1;phase='search';searchStart=performance.now();debug.event(`game-start:${target.id}`);armDeadline(searchStart+TIME_BUDGET,'color-failed');schedule();
     $('select-held-object').disabled=false;
   }
   function clearObjectLock(){previous=null;lastTargetAt=-Infinity;marker.hidden=true;hold.reset();if(found)hold.success=true;}

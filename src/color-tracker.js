@@ -1,14 +1,29 @@
 // All coordinates are normalized to the square play area. No DOM or camera access.
+// OpenCV HSV 범위(H 0~179, S·V 0~255). 경계의 밝기와 채도로 비슷한 색을 나눕니다.
 export const COLORS = [
-  {id:'red', name:'빨강', hex:'#e63946', ranges:[[0,15],[345,360]]},
-  {id:'orange', name:'주황', hex:'#f68b29', ranges:[[15,45]]},
-  {id:'yellow', name:'노랑', hex:'#efc92f', ranges:[[30,80]]},
-  {id:'green', name:'초록', hex:'#28ad6e', ranges:[[75,165]]},
-  {id:'blue', name:'파랑', hex:'#3175e9', ranges:[[160,270]]},
-  {id:'purple', name:'보라', hex:'#9754ce', ranges:[[260,345]]},
-  {id:'black', name:'검정', hex:'#222b3d'},
-  {id:'white', name:'흰색', hex:'#ffffff'},
+  // 팀원 원본의 손·얼굴 오검출을 줄이기 위해 중저명도 빨강의 채도 하한을 높입니다.
+  {id:'red', name:'빨강', hex:'#e63946', ranges:[[0,7,120,255,57,199],[0,7,151,255,200,255],[173,179,120,255,57,199],[173,179,151,255,200,255]]},
+  {id:'orange', name:'주황', hex:'#f68b29', ranges:[[8,19,64,255,166,255]]},
+  {id:'yellow', name:'노랑', hex:'#efc92f', ranges:[[20,34,64,255,57,255]]},
+  {id:'green', name:'초록', hex:'#28ad6e', ranges:[[35,49,64,255,57,169],[50,84,64,255,57,255]]},
+  {id:'blue', name:'파랑', hex:'#3175e9', ranges:[[85,114,64,255,46,189],[85,114,161,255,190,255],[115,132,64,255,46,255]]},
+  {id:'purple', name:'보라', hex:'#9754ce', ranges:[[133,149,64,255,57,255],[150,172,64,255,57,199],[150,172,151,255,200,255]]},
+  {id:'black', name:'검정', hex:'#222b3d', ranges:[[0,179,0,255,0,45],[0,179,0,128,46,102]]},
+  {id:'white', name:'흰색', hex:'#ffffff', ranges:[[0,179,0,45,199,255]]},
+  {id:'pink', name:'분홍', hex:'#ed9fba', ranges:[[150,179,46,150,200,255],[0,7,46,150,200,255]]},
+  {id:'lime', name:'연두', hex:'#b4ce72', ranges:[[35,49,64,255,170,255]]},
+  {id:'sky', name:'하늘', hex:'#8cc7e2', ranges:[[85,114,46,160,190,255]]},
+  {id:'brown', name:'갈색', hex:'#99725a', ranges:[[8,19,64,255,57,165]]},
+  {id:'gray', name:'회색', hex:'#a3a4aa', ranges:[[0,179,0,63,103,189],[0,179,0,45,190,198]]},
 ];
+// 어둡고 채도가 낮은 픽셀은 검정에만 넣고 진한 유채색의 어두운 부분은 유지합니다.
+for(const color of COLORS){
+  if(color.id==='black')continue;
+  color.ranges=color.ranges.flatMap(([h0,h1,s0,s1,v0,v1])=>{
+    if(v0>102||s0>128)return [[h0,h1,s0,s1,v0,v1]];
+    return [[h0,h1,129,s1,v0,102],[h0,h1,s0,s1,103,v1]];
+  });
+}
 
 export function handsFromLandmarks(landmarks,crop={x:0,y:0,width:1,height:1}) {
   return landmarks.map(fullPoints=>{

@@ -30,10 +30,9 @@ export class OpenCVTracker {
       cv.cvtColor(rgba,rgb,cv.COLOR_RGBA2RGB);cv.cvtColor(rgb,hsv,cv.COLOR_RGB2HSV);
       const raw=own(cv.Mat.zeros(height,width,cv.CV_8UC1)),part=own(new cv.Mat());
       const color=COLORS.find(c=>c.id===colorId);if(!color)throw new Error('알 수 없는 목표 색상');
-      const ranges=colorId==='black'?[[[0,0,0],[179,255,56]],[[0,0,57],[179,128,102]]]:colorId==='white'?[[[0,0,199],[179,45,255]]]:color.ranges.map(([start,end])=>[[Math.ceil(start/2),64,46],[Math.min(179,Math.ceil(end/2)-1),255,255]]);
-      for(const [low,high]of ranges){
-        const lower=new cv.Mat(height,width,cv.CV_8UC3,new cv.Scalar(...low));
-        const upper=new cv.Mat(height,width,cv.CV_8UC3,new cv.Scalar(...high));
+      for(const [h0,h1,s0,s1,v0,v1] of color.ranges){
+        const lower=new cv.Mat(height,width,cv.CV_8UC3,new cv.Scalar(h0,s0,v0));
+        const upper=new cv.Mat(height,width,cv.CV_8UC3,new cv.Scalar(h1,s1,v1));
         try{cv.inRange(hsv,lower,upper,part);cv.bitwise_or(raw,part,raw);}finally{lower.delete();upper.delete();}
       }
       const left=Math.ceil(width*.35-.5),right=Math.ceil(width*.65-.5),top=Math.ceil(height*.35-.5),bottom=Math.ceil(height*.65-.5);

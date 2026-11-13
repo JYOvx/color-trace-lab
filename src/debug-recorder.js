@@ -32,7 +32,7 @@ export const SCENARIOS=[
   ['lighting','조명·반사 변화','조명 아래·그늘을 오가거나 반사되게 들기'],
   ['other','기타','메모에 상황 적기'],
 ];
-export function createDebugRecorder({video,container,isCameraReady,onStart=()=>{},onStop=()=>{}}){
+export function createDebugRecorder({video,container,isCameraReady,prepare=async()=>true,onStart=()=>{},onStop=()=>{},onAvailability=()=>{}}){
   const panel=document.createElement('section');panel.className='debug-panel';
   panel.innerHTML=`<hr><h3>테스트 기록</h3>
     <label for="debug-scenario">촬영 상황 (필수)</label><select id="debug-scenario"><option value="">선택하세요</option>${SCENARIOS.map(([id,name,hint])=>`<option value="${id}">${name} — ${hint}</option>`).join('')}</select>
@@ -44,12 +44,13 @@ export function createDebugRecorder({video,container,isCameraReady,onStart=()=>{
   container.append(panel);const $=id=>panel.querySelector(`#${id}`);
   const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
   let recorder=null,capture=null,paintTimer=null,limitTimer=null,start=0,latest=null,samples=[],events=[],chunks=[],snapshots=[],snapshotTimes=[],snapshotJobs=[],lastSnapshot=-Infinity;
-  let recording=false,saving=false,finishing=false,pending=null,videoError=null,rawVideo=false;
+  let preparing=false,recording=false,saving=false,finishing=false,pending=null,videoError=null,rawVideo=false;
   const labeled=()=>!!$('debug-scenario').value&&!!$('debug-object').value;
   function readiness(){
-    $('debug-toggle').disabled=finishing||saving||!!pending||(!recording&&(!isCameraReady()||!labeled()))||!window.MediaRecorder||(!!UPLOAD_URL&&!uploadKey);
+    $('debug-toggle').disabled=preparing||finishing||saving||!!pending||(!recording&&(!isCameraReady()||!labeled()))||!window.MediaRecorder||(!!UPLOAD_URL&&!uploadKey);
     if(UPLOAD_URL&&!uploadKey)$('debug-status').textContent='저장 키가 없어 기록할 수 없습니다. 받은 링크 전체(#key=... 포함)로 다시 열어 주세요.';
-    $('debug-scenario').disabled=$('debug-object').disabled=recording||finishing||saving||!!pending;
+    onAvailability(!recording&&!$('debug-toggle').disabled,$('debug-status').textContent,!$('debug-retry').hidden);
+    $('debug-scenario').disabled=$('debug-object').disabled=preparing||recording||finishing||saving||!!pending;
   }
   $('debug-scenario').addEventListener('change',readiness);$('debug-object').addEventListener('change',readiness);
   function setTelemetry(sample){latest=sample;if(recording)samples.push({...sample,tMs:Math.round(performance.now()-start)});}
@@ -59,12 +60,12 @@ export function createDebugRecorder({video,container,isCameraReady,onStart=()=>{
     ctx.save();if(mirror){ctx.translate(w,0);ctx.scale(-1,1);}ctx.drawImage(video,0,0,w,h);ctx.restore();
     const side=Math.min(w,h)*.8,left=(w-side)/2,top=(h-side)/2;
     ctx.strokeStyle='#ffffff';ctx.lineWidth=2;ctx.setLineDash([6,5]);ctx.strokeRect(left,top,side,side);ctx.setLineDash([]);
-    ctx.strokeStyle='#ffd34a';ctx.strokeRect(left+side*.35,top+side*.35,side*.3,side*.3);
+    if(!latest?.found){for(const [stroke,width] of [['#171923',5],['#ffe600',2]]){ctx.strokeStyle=stroke;ctx.lineWidth=width;ctx.strokeRect(left+side*.35,top+side*.35,side*.3,side*.3);}}
     const point=(p,color,size)=>{ctx.beginPath();ctx.fillStyle=color;ctx.arc(left+(mirror?1-p.x:p.x)*side,top+p.y*side,size,0,Math.PI*2);ctx.fill();};
     // Expired telemetry is not drawn as a fresh detection.
     const fresh=latest&&performance.now()-latest.timestamp<700;
-    if(latest?.path&&latest.phase!=='countdown'){ctx.strokeStyle='#ffffffcc';ctx.lineWidth=2;ctx.beginPath();latest.path.forEach((p,i)=>{const x=left+(mirror?1-p.x:p.x)*side,y=top+p.y*side;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.closePath();ctx.stroke();}
-    if(fresh){for(const hand of latest.hands??[])for(const p of hand.points)point(p,'#fcd34d',2);if(latest.target)point(latest.target,'#22f39b',7);}
+    if(latest?.path&&latest.phase!=='countdown'){ctx.strokeStyle='#ffffffcc';ctx.lineWidth=2;ctx.setLineDash([5,4]);ctx.beginPath();latest.path.forEach((p,i)=>{const x=left+(mirror?1-p.x:p.x)*side,y=top+p.y*side;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.closePath();ctx.stroke();ctx.setLineDash([]);}
+    if(fresh){for(const hand of latest.hands??[])for(const p of hand.points)point(p,'#fcd34d',2);if(latest.target)point(latest.target,COLORS.find(color=>color.id===latest.color)?.hex??'#fff',7);}
     ctx.fillStyle='#102039d9';ctx.fillRect(0,0,w,66);ctx.fillStyle='white';ctx.font='13px sans-serif';
     ctx.fillText(`REC ${((performance.now()-start)/1000).toFixed(1)}s | ${latest?.color??'not-started'} | ${fresh?latest.reason:'NO_FRESH_SAMPLE'}`,10,22);
     ctx.fillText(`color ${((latest?.rawCoverage??0)*100).toFixed(1)}% | accepted ${((latest?.coverage??0)*100).toFixed(1)}% | hands ${fresh?latest.hands.length:0} | ${latest?.phase??'-'} ${latest?.trace?`${latest.trace.passed}/12 acc ${latest.trace.accuracy?.toFixed(1)??'-'}`:''}`,10,45);
@@ -75,7 +76,8 @@ export function createDebugRecorder({video,container,isCameraReady,onStart=()=>{
     $('debug-toggle').textContent=`기록 종료 · ${Math.floor((performance.now()-start)/1000)}초`;
   }
   async function save(){
-    if(!pending||saving)return;saving=true;readiness();$('debug-retry').hidden=true;$('debug-status').textContent=UPLOAD_URL?'Google Drive로 보내는 중입니다(최대 1~2분). 완료될 때까지 이 페이지를 유지해 주세요.':'로컬 폴더에 저장 중입니다. 완료될 때까지 이 페이지를 유지해 주세요.';
+    if(!pending||saving)return;saving=true;$('debug-retry').hidden=true;$('debug-status').textContent=UPLOAD_URL?'Google Drive로 보내는 중입니다(최대 1~2분). 완료될 때까지 이 페이지를 유지해 주세요.':'로컬 폴더에 저장 중입니다. 완료될 때까지 이 페이지를 유지해 주세요.';
+    readiness();
     try{
       let result;
       if(UPLOAD_URL)result=await uploadRemote(pending);
@@ -94,16 +96,26 @@ export function createDebugRecorder({video,container,isCameraReady,onStart=()=>{
   function finish(reason='manual'){
     if(!recording)return;
     events.push({tMs:Math.round(performance.now()-start),type:'stop',reason});recording=false;finishing=true;onStop(reason);
+    $('debug-status').textContent='녹화를 마무리하는 중입니다.';
+    readiness();
     clearInterval(paintTimer);clearTimeout(limitTimer);
     $('debug-toggle').textContent='기록 시작';$('debug-mark').disabled=true;$('debug-toggle').disabled=true;
     if(recorder.state!=='inactive')recorder.stop();
   }
-  $('debug-toggle').addEventListener('click',()=>{
-    if(recording){finish();return;}
+  // 이전 저장이 끝나고 입력이 준비됐을 때만 새 녹화를 시작합니다.
+  async function startRecording(){
+    if(recording||finishing||saving||$('debug-toggle').disabled)return;
     if(!isCameraReady()||pending||!labeled())return;
     const scenario=$('debug-scenario').value,objectColor=$('debug-object').value;
     if(!window.MediaRecorder||!canvas.captureStream){$('debug-status').textContent='이 브라우저는 영상 기록을 지원하지 않습니다. Chrome 또는 Edge에서 시도해 주세요.';return;}
+    preparing=true;
+    $('debug-status').textContent='게임을 준비하고 있어요.';
+    readiness();
     try{
+      if(!await prepare()||!isCameraReady()){
+        $('debug-status').textContent='게임 준비가 끝나지 않았습니다. 카메라 연결을 확인하고 다시 시작해 주세요.';
+        return;
+      }
       const scale=Math.min(1,640/Math.max(video.videoWidth,video.videoHeight));canvas.width=Math.round(video.videoWidth*scale);canvas.height=Math.round(video.videoHeight*scale);
       samples=[];events=[];chunks=[];snapshots=[];snapshotTimes=[];snapshotJobs=[];lastSnapshot=-Infinity;videoError=null;
       start=performance.now();const startedAt=new Date().toISOString();recording=true;
@@ -124,12 +136,14 @@ export function createDebugRecorder({video,container,isCameraReady,onStart=()=>{
         await save();
       };
       recorder.start(1000);onStart();draw();paintTimer=setInterval(draw,1000/15);limitTimer=setTimeout(()=>finish('38-second-limit'),38000);
-      $('debug-status').textContent='● 기록 중 · 영상과 로그는 이 PC에만 저장합니다.';$('debug-mark').disabled=false;
-    }catch(error){recording=false;capture?.getTracks().forEach(track=>track.stop());$('debug-status').textContent='기록을 시작하지 못했습니다. 브라우저의 영상 기록 지원을 확인해 주세요.';readiness();}
-  });
+      $('debug-status').textContent='● 게임과 녹화 진행 중';$('debug-mark').disabled=false;
+    }catch(error){recording=false;onStop('start-error');capture?.getTracks().forEach(track=>track.stop());$('debug-status').textContent='기록을 시작하지 못했습니다. 브라우저의 영상 기록 지원을 확인해 주세요.';}
+    finally{preparing=false;readiness();}
+  }
+  $('debug-toggle').addEventListener('click',()=>recording?finish():startRecording());
   $('debug-mark').addEventListener('click',()=>{if(recording){events.push({tMs:Math.round(performance.now()-start),type:'user-mark',note:$('debug-notes').value.slice(0,500)});$('debug-status').textContent=`문제 순간 표시: ${((performance.now()-start)/1000).toFixed(1)}초`;} });
   $('debug-retry').addEventListener('click',save);
   window.addEventListener('beforeunload',event=>{if(recording||finishing||saving||pending){event.preventDefault();event.returnValue='';}});
   document.addEventListener('visibilitychange',()=>{if(document.hidden)finish('tab-hidden');});
-  return {setTelemetry,updateReady:readiness,stop:()=>finish('camera-or-practice-stopped'),event:type=>{if(recording)events.push({type,tMs:Math.round(performance.now()-start)});}};
+  return {start:startRecording,retry:save,endGame:sample=>{setTelemetry({...latest,...sample});finish('game-ended');},setTelemetry,updateReady:readiness,stop:()=>finish('camera-or-practice-stopped'),event:type=>{if(recording)events.push({type,tMs:Math.round(performance.now()-start)});}};
 }
