@@ -38,3 +38,4 @@ main{padding:16px clamp(10px,2.4vw,28px) 30px}
 .stage-tabs{display:flex;gap:4px;align-items:center;color:#675e54;font-size:13px}.stage-tabs span{padding:4px 8px}
 #lobby[data-phase=search] [data-step=search],#lobby[data-phase=draw] [data-step=draw],#lobby[data-phase=done] [data-step=done]{background:#f8e7a7;border-radius:2px;border-bottom:2px solid #dabb76}
 @media(max-width:700px){.section-heading{flex-wrap:wrap;gap:6px}.stage-tabs{order:3;width:100%}.section-heading #leave{margin-left:auto}}
+@media(max-width:700px){.camera-view{inset:112px 0 0}.detected-color-metric{grid-column:span 2}}

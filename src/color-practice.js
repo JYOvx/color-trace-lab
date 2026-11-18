@@ -45,6 +45,8 @@ export function createColorPractice({video, playArea, isCameraReady}) {
   let tracker=null;
   let active=false,found=false,target=null,previous=null,lastProcessed=-Infinity,frameId=null;
   let practiceReady=false;
+  // 미리보기는 게임 판정과 분리하고 약 4회/초만 13색을 비교합니다.
+  let previewPrevious=null,lastRecognized=-Infinity;
   let manualPoint=null,manualLock=false,selecting=false;
   let phase=null,searchStart=0,remaining=TIME_BUDGET,countdownUntil=0,drawStart=0,path=null,judge=null,lost=false,outcome=null;
   function timeLeft(now){return phase==='search'?TIME_BUDGET-(now-searchStart):phase==='countdown'?remaining:phase==='draw'?remaining-(now-drawStart):Math.max(0,remaining);}
@@ -120,23 +122,40 @@ export function createColorPractice({video, playArea, isCameraReady}) {
     marker.hidden=true;playArea.classList.remove('color-found');
     phase=null;path=null;judge=null;lost=false;outcome=null;remaining=TIME_BUDGET;renderOverlay();
     $('time-left').textContent='30.0초';$('trace-accuracy').textContent='—';$('trace-progress').textContent='—';
+    previewPrevious=null;lastRecognized=-Infinity;
+    $('color-match').textContent='—';$('detected-color').textContent='—';
     $('raw-color-coverage').textContent='—';$('color-coverage').textContent='—';$('color-hold').textContent='—';$('hold-progress').value=0;
     $('color-status').textContent=message;
     previewChoice();
+    if(practiceReady&&isCameraReady())void preparePreview();
+  }
+  // 카메라 연결만으로 OpenCV 미리보기를 준비하며 녹화와 게임은 시작하지 않습니다.
+  async function preparePreview(){
+    const version=generation;
+    $('color-status').textContent='색상 미리보기를 준비하고 있어요…';
+    try{
+      const {cv}=await loadOpenCV();
+      if(version!==generation||!practiceReady||!isCameraReady()||active||phase==='done')return;
+      tracker=new OpenCVTracker(cv);
+      $('color-status').textContent='중앙 상자에 물체를 보여 주세요. 기록 전에도 색상을 확인할 수 있어요.';
+      lastProcessed=-Infinity;lastTime=-1;schedule();
+    }catch(error){
+      if(version===generation)$('color-status').textContent='색상 미리보기를 준비하지 못했습니다. 카메라를 다시 연결해 주세요.';
+    }
   }
   function updateReady(ready){
     practiceReady=ready;
     $('game-hud').hidden=!ready;
     debug.updateReady();
-    if(!ready)reset();
+    reset();
   }
   function schedule(){
-    if(!active)return;
+    if(frameId!==null||!isCameraReady()||!tracker||phase==='done')return;
     frameId=video.requestVideoFrameCallback ? video.requestVideoFrameCallback(process) : requestAnimationFrame(process);
   }
   function process(now){
     frameId=null;
-    if(!active||!isCameraReady())return;
+    if(!isCameraReady()||!tracker||phase==='done')return;
     if(document.hidden){hold.reset();schedule();return;}
     if(now-lastProcessed<80||video.readyState<2||video.currentTime===lastTime){schedule();return;}
     lastTime=video.currentTime;lastProcessed=now;
@@ -144,6 +163,15 @@ export function createColorPractice({video, playArea, isCameraReady}) {
       // Crop the source video, not the CSS-scaled or mirrored display.
       const side=Math.min(video.videoWidth,video.videoHeight)*.8;
       context.drawImage(video,(video.videoWidth-side)/2,(video.videoHeight-side)/2,side,side,0,0,160,160);
+      const image=context.getImageData(0,0,160,160);
+      if(now-lastRecognized>=250){
+        const recognized=tracker.analyze(image,null,previewPrevious,!active||!found);
+        previewPrevious=recognized.target;lastRecognized=now;
+        const color=COLORS.find(c=>c.id===recognized.target?.colorId);
+        $('color-match').textContent=color?`${(recognized.colorCoverage*100).toFixed(1)}%`:'—';
+        $('detected-color').textContent=color?.name??'미검출';
+      }
+      if(!active){schedule();return;}
       // Detect hands across the whole frame, including fingers outside the play area.
       const scale=Math.min(1,640/Math.max(video.videoWidth,video.videoHeight));
       const handWidth=Math.round(video.videoWidth*scale),handHeight=Math.round(video.videoHeight*scale);
@@ -153,7 +181,7 @@ export function createColorPractice({video, playArea, isCameraReady}) {
       handDetector.submit(handCanvas,now,{x:(video.videoWidth-side)/2/video.videoWidth,y:(video.videoHeight-side)/2/video.videoHeight,width:side/video.videoWidth,height:side/video.videoHeight});
       const hands=handDetector.getHands(now);
       if(hands.length)lastHandAt=handDetector.timestamp;
-      const result=tracker.analyze(context.getImageData(0,0,160,160),target.id,previous,!found,{hands,now,lastHandAt,lastTargetAt,manualPoint,manualLock});
+      const result=tracker.analyze(image,target.id,previous,!found,{hands,now,lastHandAt,lastTargetAt,manualPoint,manualLock});
       if(manualPoint){manualPoint=null;if(result.target){selecting=false;video.parentElement.classList.remove('selecting-object');}}
       const state=hold.update(result.target ? result.coverage : 0,now);
       debug.setTelemetry({engine:result.engine,selectionMode:manualLock?'manual-held-object':'automatic-hand-contact',timestamp:now,videoTime:video.currentTime,color:target.id,rawCoverage:result.rawCoverage,coverage:result.coverage,hands,handAgeMs:Number.isFinite(handDetector.timestamp)?now-handDetector.timestamp:null,target:result.target,candidateCount:result.candidateCount,candidates:result.candidates,reason:result.reason,rejectionCounts:result.rejectionCounts,diagnostics:result.diagnostics,holdProgress:state.progress,found:state.success,mirrored:video.classList.contains('mirrored'),phase,timeLeftMs:Math.round(timeLeft(now)),outcome,path:path?.vertices??null,trace:judge?(({started,direction,passed,accuracy,complete})=>({started,direction,passed,accuracy,complete}))(judge.state()):null});
@@ -199,6 +227,7 @@ export function createColorPractice({video, playArea, isCameraReady}) {
       debug.event(`analysis-error:${error.name}`);
       debug.stop();
       reset('영상 분석을 중단했습니다. 카메라를 다시 연결한 뒤 재시도해 주세요.');
+      generation++;cancelFrame();
       return;
     }
     schedule();
@@ -245,5 +274,5 @@ export function createColorPractice({video, playArea, isCameraReady}) {
   // A new tab-visible frame must establish a fresh continuous 0.5 second hold.
   document.addEventListener('visibilitychange',()=>{if(!found)hold.reset();});
   $('practice-color').addEventListener('change',()=>{if(!active)previewChoice();});
-  return {updateReady,stop:()=>{debug.stop();reset();}};
+  return {updateReady,stop:()=>{practiceReady=false;debug.stop();reset();}};
 }
